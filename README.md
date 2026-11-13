@@ -94,22 +94,25 @@ indicator, not a decimal score. Exact score is always shown at game over.
 
 ## Steering / display orientation
 
-Mounting orientation behind the panel is not yet verified on hardware.
-Defaults in `code.py` use accelerometer X as horizontal and Y as vertical:
+The display output is rotated 90 degrees clockwise for the handle-mounted
+orientation. Defaults in `code.py` retain accelerometer X and Y as the
+steering axes:
 
 ```python
 ACCEL_HORIZONTAL_AXIS = 0
 ACCEL_VERTICAL_AXIS = 1
 STEERING_DIRECTION = 1
-DISPLAY_ROTATION = 0
+DISPLAY_ROTATION = 90
 ```
 
 Axes are 0=X, 1=Y, 2=Z. If movement is reversed, set
 `STEERING_DIRECTION = -1`. If tilting does not move the ship correctly,
 swap the horizontal and vertical axes, then restart and recalibrate.
 Use distinct axes lying in the panel's plane. Rotation can be
-0, 90, 180, or 270 degrees; changing display rotation may also require
-changing steering axes/direction.
+0, 90, 180, or 270 degrees clockwise. Start a new game after changing the
+panel orientation to recalibrate neutral steering. The existing in-plane
+axes support this quarter-turn without swapping; verify left/right movement
+on hardware.
 
 If calibration reports "Hold panel upright", hold it vertically rather than
 flat and verify the selected axes. Failed calibration leaves the game on
