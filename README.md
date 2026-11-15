@@ -10,7 +10,7 @@ No Wi-Fi, cloud services, downloaded sprites, or audio files are needed.
 - Adafruit MatrixPortal S3 (PID 5778).
 - 64x64, 1/32-scan RGB matrix (previous project's PID 3649).
 - Existing NS4168 I2S amplifier and speaker.
-- **New:** normally-open momentary push button.
+- Two normally-open momentary push buttons (right hand and left hand).
 
 Disconnect USB power before rewiring. Remove the PIR and its power wires.
 Leave the working amplifier and panel power connections unchanged.
@@ -20,13 +20,15 @@ Leave the working amplifier and panel power connections unchanged.
 | A1 | NS4168 BCLK |
 | A2 | NS4168 LRC / word select |
 | A3 | NS4168 DIN |
-| A4 | One terminal of the new fire button |
-| GND | Other terminal of the fire button; common amplifier ground |
+| A4 | One terminal of the right-hand button |
+| RXI (`board.RX`) | One terminal of the left-hand button |
+| GND | Other terminal of each button; common amplifier ground |
 | HUB75 | Panel INPUT connector |
 | Panel power +5V / GND | Existing panel red / black power leads |
 
-The fire input uses an internal pull-up: pressing connects A4 to GND.
-**Never connect A4 to +5V.** A1-A4 are board labels, not raw GPIO numbers.
+Both button inputs use internal pull-ups: pressing connects A4 or RXI to GND.
+**Never connect A4 or RXI to +5V.** A1-A4 are board labels, not raw GPIO numbers.
+RXI is reserved for the left-hand button, not UART serial input.
 For a four-legged tactile switch, use terminals on opposite electrical sides;
 verify with a continuity meter, because same-side terminals are usually joined.
 Speaker leads stay connected to the amplifier's speaker output, not ground.
@@ -49,9 +51,10 @@ need no additional wiring.
    - the complete `adafruit_bus_device/` directory
    to `CIRCUITPY/lib/`. These are the only external runtime dependencies.
 3. Back up the old `CIRCUITPY/code.py` somewhere outside the device.
-4. Copy this project's `game.py`, `graphics.py`, and finally `code.py` to the
-   **root** of `CIRCUITPY`. Copying the entry point last avoids a premature
-   reload with missing game modules. Do not copy tests onto the board.
+4. Copy this project's `game.py`, `rally.py`, `graphics.py`, and finally
+   `code.py` to the **root** of `CIRCUITPY`. Copying the entry point last avoids
+   a premature reload with missing game modules. When updating an existing
+   installation, replace all four files. Do not copy tests onto the board.
 5. CircuitPython automatically reloads. The panel should show MATRIX DEFENDER.
    Open the USB serial console for startup errors and calibration messages.
 
@@ -61,12 +64,18 @@ No old Halloween code or audio assets are required.
 
 ## Play
 
-- Press **fire** to start. Hold the panel upright, facing you and still for
+- Press either the **right-hand (A4)** or **left-hand (RXI)** button to start.
+  Either button acts as **fire** when pressed alone.
+  Hold the panel upright, facing you and still for
   approximately 0.6 seconds while it averages a neutral steering position.
   Calibration repeats on each new game.
 - Tilt left/right like a steering wheel to move. More tilt means faster
   movement; a small dead zone and filtering suppress jitter.
-- Hold **fire** for repeated shots, at most approximately four shots/second.
+- Hold either button for repeated shots, at most approximately four shots/second.
+  Pressing both suppresses firing. Hold both for **3 seconds** to abandon the
+  current game and return to the MATRIX DEFENDER "FIRE TO START" screen.
+  This also works while paused, at game over, or during calibration.
+  Release **both** buttons before firing or using another shortcut.
 - **Up:** pause/resume, including the between-wave countdown.
 - **Down:** toggle **all** audio, even while paused or at game over.
   An amber pixel indicates audio enabled; dim means muted. Unmuting beeps.
@@ -78,6 +87,40 @@ No old Halloween code or audio assets are required.
 - Game over shows exact score and best score; press fire to restart.
   Best score and mute state survive restarts **within the running session**,
   but reset on power loss or CircuitPython reload. No flash writes occur.
+
+### Matrix Rally Easter egg
+
+On the MATRIX DEFENDER "FIRE TO START" screen, hold **both hand buttons for
+3 seconds** to open **MATRIX RALLY**. Hold the panel upright and still for
+the initial 0.6-second menu calibration, then release both buttons.
+
+- Tilt **left** toward Easy or **right** toward Hard to move through the
+  single-row **EASY / MED / HARD** options. The selected option is green;
+  the other two are gray. Holding a tilt repeats the
+  selection slowly; return to neutral to stop. Medium is selected initially.
+  Menu navigation uses the same tilt sensitivity, filtering, and dead zone
+  as Defender steering.
+- Press either hand button alone to confirm. Hold upright and still again
+  while the match calibrates, then tilt left/right to move the **bottom green
+  paddle**. The computer controls the **top blue paddle**.
+- Easy has a slower ball and slower, less accurate computer; Medium is
+  balanced; Hard has a faster ball and faster, more accurate computer.
+  Paddle hits gradually accelerate the ball, up to a bounded maximum.
+- Missing the ball awards the opponent a point. **First to 5 wins**.
+  Row 0 shows blue computer points and green player points; the amber audio
+  indicator is unchanged. A short serve delay follows each point.
+- **Up** pauses/resumes, including the serve delay. **Down** toggles shared
+  audio. Muting remains in effect when switching games.
+- After a win/loss, press either hand button to return to the difficulty
+  menu for a rematch.
+- From any Rally screen, including its menu, hold both hand buttons for
+  **3 seconds** to return to Defender's main screen. Release both before
+  playing again or opening Rally. A held shortcut triggers only once.
+
+Returning to Defender clears the abandoned game's score/lives but preserves
+the session's best score and mute state. Interrupted two-button holds reset
+the three-second timer and require releasing both buttons before single-button
+actions resume. No new libraries, wiring changes, or flash writes are needed.
 
 ### Single-row HUD
 
@@ -133,18 +176,24 @@ These tests do **not** prove physical accelerometer orientation, installed
 firmware support, frame rate, sound volume, or wiring. Initial hardware check:
 
 1. Confirm the title screen and serial startup message.
-2. Start upright; test both steering directions and held fire.
+2. Start upright; test starting/restarting and held fire with each hand button,
+   both steering directions, and confirm pressing both suppresses firing.
 3. Check up pauses movement/shots and down silences audio immediately.
 4. Test audio at low volume. Adjust `AUDIO_VOLUME` in `code.py` if needed.
 5. Play through a wave and a game over; confirm lives, progress, and restart.
+6. Hold both for three seconds to return home, release, then hold both again
+   to open Rally. Verify continuing to hold cannot trigger a second shortcut.
+7. Test all Rally difficulties, paddle directions, scoring to five, rematches,
+   pause/mute, and returning home from the menu and a paused match.
 
 Missing-library errors: check `lib/` placement and use the 10.x bundle.
 I2C initialization errors: verify this is the MatrixPortal S3 and the onboard
 accelerometer is accessible; startup exceptions are intentionally not hidden.
 Blank/duplicated panel rows: check HUB75 INPUT, power, and Address E jumper.
 No sound: check A1/A2/A3, amplifier power/common ground and mute indicator.
-Unresponsive fire: verify the button shorts A4 to GND, not two already-joined
-legs. Disconnect power before adjusting connections.
+Unresponsive fire: verify the right-hand button shorts A4 to GND and the
+left-hand button shorts RXI to GND, not two already-joined legs.
+Disconnect power before adjusting connections.
 
 The game updates at a nominal 30 FPS, bounds projectile counts, reuses sound
 notes, and caps simulation stalls to prevent collision tunneling. On a slow

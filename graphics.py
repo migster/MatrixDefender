@@ -1,6 +1,7 @@
 """Small original sprites and a 3x5 font; no external image/font files."""
 
 from game import PLAYER_Y, score_bar
+from rally import BOTTOM_Y, PADDLE_WIDTH, TOP_Y
 
 FONT = {
     "A": ("010", "101", "111", "101", "101"),
@@ -51,8 +52,9 @@ def sprite(bitmap, rows, x, y, color):
                 bitmap[px, py] = color
 
 
-def text(bitmap, message, y, color=5):
-    x = (64 - (len(message) * 4 - 1)) // 2
+def text(bitmap, message, y, color=5, x=None):
+    if x is None:
+        x = (64 - (len(message) * 4 - 1)) // 2
     for char in message:
         if char != " ":
             sprite(bitmap, FONT[char], x, y, color)
@@ -110,3 +112,40 @@ def render(bitmap, game, muted, calibrating=False):
             sprite(bitmap, ("1", "1"), x, y, 5)
         for x, y in game.enemy_shots:
             sprite(bitmap, ("1", "1"), x, y, 3)
+
+
+def render_rally(bitmap, rally, muted, calibrating=False):
+    bitmap.fill(0)
+    bitmap[8, 0] = 7 if muted else 4
+    for i in range(5):
+        bitmap[18 + i * 2, 0] = 2 if i < rally.computer_score else 7
+        bitmap[38 + i * 2, 0] = 1 if i < rally.player_score else 7
+    if calibrating:
+        text(bitmap, "MATRIX RALLY", 8, 2)
+        text(bitmap, "HOLD", 24)
+        text(bitmap, "UPRIGHT", 32)
+        text(bitmap, "STILL", 40)
+    elif rally.state == "menu":
+        text(bitmap, "MATRIX", 5, 2)
+        text(bitmap, "RALLY", 13, 1)
+        x = 6
+        for i, label in enumerate(("EASY", "MED", "HARD")):
+            text(bitmap, label, 32, 1 if i == rally.difficulty else 5, x=x)
+            x += (len(label) + 1) * 4
+        text(bitmap, "TILT TO SELECT", 52)
+        text(bitmap, "FIRE TO START", 59)
+    elif rally.state == "paused":
+        text(bitmap, "PAUSED", 26, 2)
+        text(bitmap, "UP TO GO", 38)
+    elif rally.state == "over":
+        won = rally.player_score == 5
+        text(bitmap, "YOU WIN" if won else "CPU WINS", 10, 1 if won else 3)
+        text(bitmap, "YOU " + str(rally.player_score), 25, 1)
+        text(bitmap, "CPU " + str(rally.computer_score), 34, 2)
+        text(bitmap, "FIRE TO GO", 51)
+    else:
+        paddle = ("1" * PADDLE_WIDTH,) * 2
+        sprite(bitmap, paddle, rally.computer_x, TOP_Y, 2)
+        sprite(bitmap, paddle, rally.player_x, BOTTOM_Y, 1)
+        sprite(bitmap, ("111", "111", "111"),
+               int(rally.ball_x) - 1, int(rally.ball_y) - 1, 5)

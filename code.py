@@ -12,8 +12,9 @@ import framebufferio
 import rgbmatrix
 import synthio
 
-from game import Button, Game, Steering
-from graphics import render
+from game import Button, Game, HandButtons, Steering
+from graphics import render, render_rally
+from rally import Rally
 
 # These axes depend on how the MatrixPortal is mounted behind the panel.
 ACCEL_HORIZONTAL_AXIS = 0
@@ -130,10 +131,11 @@ def main():
     root.append(displayio.TileGrid(bitmap, pixel_shader=palette))
     display.root_group = root
 
-    fire_pin = input_pin(board.A4)
+    right_button_pin = input_pin(board.A4)
+    left_button_pin = input_pin(board.RX)
     down_pin = input_pin(board.BUTTON_DOWN)
     up_pin = input_pin(board.BUTTON_UP)
-    fire = Button(fire_pin.value)
+    hands = HandButtons(right_button_pin.value, left_button_pin.value)
     down = Button(down_pin.value)
     up = Button(up_pin.value)
     # LIS3DH is onboard at 0x19; its driver manages the I2C lock.
@@ -144,26 +146,61 @@ def main():
     )
     sound = Sound()
     game = Game()
+    rally = Rally()
+    active = game
     calibration_at = None
+    calibration_action = "start"
+    menu_calibrated = False
+    shortcut_to_rally = False
     samples = 0
     sums = [0.0, 0.0, 0.0]
     last_frame = time.monotonic()
-    print("Matrix Defender ready: A4 fire, UP pause, DOWN mute")
+    print("Matrix Defender ready: A4 right / RXI left start/fire, UP pause, DOWN mute")
     try:
         while True:
             now = time.monotonic()
-            fire.update(fire_pin.value, now)
+            previous_hold = hands.hold_at
+            shortcut = hands.update(right_button_pin.value, left_button_pin.value, now)
+            if previous_hold is None and hands.hold_at is not None:
+                shortcut_to_rally = (
+                    active is game and game.state == "ready"
+                    and calibration_at is None
+                )
             down.update(down_pin.value, now)
             up.update(up_pin.value, now)
             sound.update(now)
             if down.fell:
                 sound.toggle(now)
-            if up.fell and calibration_at is None and game.pause():
+            if shortcut:
+                sound.stop()
+                calibration_at = None
+                if shortcut_to_rally:
+                    rally.show_menu()
+                    active = rally
+                    menu_calibrated = False
+                    calibration_action = "menu"
+                    calibration_at = now
+                    samples = 0
+                    sums = [0.0, 0.0, 0.0]
+                    print("Matrix Rally: hold panel upright and still for menu calibration")
+                else:
+                    game.return_to_title()
+                    active = game
+                    print("Returned to Matrix Defender title")
+            if up.fell and calibration_at is None and active.pause():
                 sound.stop()
             if (
-                fire.fell and game.state in ("ready", "over")
+                hands.start_pressed
+                and active.state in ("ready", "over", "menu")
                 and calibration_at is None
             ):
+                calibration_action = "start"
+                if active is rally:
+                    if rally.state == "over":
+                        rally.show_menu()
+                        menu_calibrated = False
+                    if not menu_calibrated:
+                        calibration_action = "menu"
                 calibration_at = now
                 samples = 0
                 sums = [0.0, 0.0, 0.0]
@@ -185,26 +222,37 @@ def main():
                     except ValueError as error:
                         print("Calibration failed:", error, "- press FIRE to retry")
                     else:
-                        game.start()
-                        sound.play("wave", now)
-                        print("Game started; neutral angle:", steering.neutral)
+                        if calibration_action == "menu":
+                            menu_calibrated = True
+                            print("Matrix Rally: tilt to select, FIRE to start")
+                        else:
+                            active.start()
+                            sound.play("wave", now)
+                            print("Game started; neutral angle:", steering.neutral)
                     calibration_at = None
             else:
                 velocity = steering.velocity(acceleration, min(dt, 0.05))
-                game.update(dt, velocity, fire.pressed)
-                if game.events:
-                    event = max(game.events, key=lambda e: sound.priorities[e])
+                if active is game:
+                    game.update(dt, velocity, hands.firing)
+                elif rally.state != "menu" or menu_calibrated:
+                    rally.update(dt, velocity)
+                if active.events:
+                    event = max(active.events, key=lambda e: sound.priorities[e])
                     sound.play(event, now)
-                    if "over" in game.events:
+                    if active is game and "over" in game.events:
                         print("Game over. Score:", game.score, "Best:", game.best)
-            render(bitmap, game, sound.muted, calibration_at is not None)
+            if active is game:
+                render(bitmap, game, sound.muted, calibration_at is not None)
+            else:
+                render_rally(bitmap, rally, sound.muted, calibration_at is not None)
             display.refresh(minimum_frames_per_second=0)
     finally:
         sound.stop()
         sound.output.stop()
         sound.output.deinit()
         sound.synth.deinit()
-        fire_pin.deinit()
+        right_button_pin.deinit()
+        left_button_pin.deinit()
         down_pin.deinit()
         up_pin.deinit()
 

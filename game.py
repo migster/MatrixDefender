@@ -34,6 +34,50 @@ class Button:
         self.pressed = not self.stable
 
 
+class HandButtons:
+    """Keep single-button actions separate from the two-button shortcut."""
+
+    def __init__(self, right=True, left=True):
+        self.right = Button(right)
+        self.left = Button(left)
+        self.hold_at = None
+        self.blocked = False
+        self.used = False
+        self.pending_at = None
+        self.start_pressed = False
+        self.firing = False
+
+    def update(self, right, left, now):
+        self.right.update(right, now)
+        self.left.update(left, now)
+        self.start_pressed = False
+        self.firing = False
+        if not right and not left:
+            self.blocked = True
+            self.pending_at = None
+        if self.right.pressed and self.left.pressed and not right and not left:
+            if self.hold_at is None:
+                self.hold_at = now
+            if not self.used and now - self.hold_at >= 3.0:
+                self.used = True
+                return True
+        else:
+            self.hold_at = None
+        if right and left and not self.right.pressed and not self.left.pressed:
+            self.blocked = False
+            self.used = False
+        if self.blocked:
+            return False
+        self.firing = self.right.pressed != self.left.pressed
+        if self.right.fell or self.left.fell:
+            self.pending_at = now
+        # Allow a slightly staggered second press to cancel a menu selection.
+        if self.pending_at is not None and now - self.pending_at >= 0.08:
+            self.start_pressed = True
+            self.pending_at = None
+        return False
+
+
 class Steering:
     def __init__(self, horizontal=0, vertical=1, direction=1):
         if horizontal not in (0, 1, 2) or vertical not in (0, 1, 2):
@@ -91,6 +135,16 @@ class Game:
         self.player_shots = []
         self.enemy_shots = []
         self.events = []
+
+    def return_to_title(self):
+        self.state = "ready"
+        self.score = 0
+        self.lives = 3
+        self.wave = 0
+        self.player_shots.clear()
+        self.enemy_shots.clear()
+        self.aliens.clear()
+        self.events.clear()
 
     def start(self):
         self.score = 0
